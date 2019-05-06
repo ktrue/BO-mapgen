@@ -16,7 +16,7 @@ This script set will read lightning strike and reporting station data from the p
 
 ## Sample map
 
-<img src="sample-output.gif" "Sample output map gif">
+<img src="sample-output.gif" alt="Sample output map gif">
 
 ## Installation:
 
