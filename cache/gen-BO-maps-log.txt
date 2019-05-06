@@ -1,0 +1,116 @@
+BOmapgen - V1.00 - 18-Apr-2015
+start processing for region 3 data Sat, 18 Apr 2015 13:42:17
+cache/strikes.txt filtered for old data
+First data: Sun, 12 Apr 2015 21:02:16
+Last data : Sun, 12 Apr 2015 21:02:24
+old data - restart collection from Sat, 18 Apr 2015 11:42:17
+fetching new strikes file at http://user:pass-omitted@data.blitzortung.org/Data_3/Protected/Strikes/2015/04/18/15/40.json
+timed calls took 0.198 for 2652 executions in 20.291 seconds.
+2652 lines read. 2035 lines written to cache/strikes.txt.
+
+fetching new strikes file at http://user:pass-omitted@data.blitzortung.org/Data_3/Protected/Strikes/2015/04/18/15/50.json
+timed calls took 0.184 for 2166 executions in 17.101 seconds.
+2166 lines read. 2166 lines written to cache/strikes.txt.
+
+fetching new strikes file at http://user:pass-omitted@data.blitzortung.org/Data_3/Protected/Strikes/2015/04/18/16/00.json
+timed calls took 0.193 for 2242 executions in 17.655 seconds.
+2242 lines read. 2242 lines written to cache/strikes.txt.
+
+fetching new strikes file at http://user:pass-omitted@data.blitzortung.org/Data_3/Protected/Strikes/2015/04/18/16/10.json
+timed calls took 0.189 for 2197 executions in 16.558 seconds.
+2197 lines read. 2197 lines written to cache/strikes.txt.
+
+fetching new strikes file at http://user:pass-omitted@data.blitzortung.org/Data_3/Protected/Strikes/2015/04/18/16/20.json
+timed calls took 0.160 for 2184 executions in 16.026 seconds.
+2184 lines read. 2184 lines written to cache/strikes.txt.
+
+fetching new strikes file at http://user:pass-omitted@data.blitzortung.org/Data_3/Protected/Strikes/2015/04/18/16/30.json
+timed calls took 0.205 for 2420 executions in 17.321 seconds.
+2420 lines read. 2420 lines written to cache/strikes.txt.
+
+fetching new strikes file at http://user:pass-omitted@data.blitzortung.org/Data_3/Protected/Strikes/2015/04/18/16/40.json
+timed calls took 0.159 for 2258 executions in 16.578 seconds.
+2258 lines read. 2258 lines written to cache/strikes.txt.
+
+fetching new strikes file at http://user:pass-omitted@data.blitzortung.org/Data_3/Protected/Strikes/2015/04/18/16/50.json
+timed calls took 0.198 for 2552 executions in 18.185 seconds.
+2552 lines read. 2552 lines written to cache/strikes.txt.
+
+fetching new strikes file at http://user:pass-omitted@data.blitzortung.org/Data_3/Protected/Strikes/2015/04/18/17/00.json
+timed calls took 0.167 for 2300 executions in 16.971 seconds.
+2300 lines read. 2300 lines written to cache/strikes.txt.
+
+fetching new strikes file at http://user:pass-omitted@data.blitzortung.org/Data_3/Protected/Strikes/2015/04/18/17/10.json
+timed calls took 0.170 for 2172 executions in 16.421 seconds.
+2172 lines read. 2172 lines written to cache/strikes.txt.
+
+fetching new strikes file at http://user:pass-omitted@data.blitzortung.org/Data_3/Protected/Strikes/2015/04/18/17/20.json
+timed calls took 0.161 for 2205 executions in 16.423 seconds.
+2205 lines read. 2205 lines written to cache/strikes.txt.
+
+fetching new strikes file at http://user:pass-omitted@data.blitzortung.org/Data_3/Protected/Strikes/2015/04/18/17/30.json
+timed calls took 0.165 for 1977 executions in 15.542 seconds.
+1977 lines read. 1977 lines written to cache/strikes.txt.
+
+fetching new strikes file at http://user:pass-omitted@data.blitzortung.org/Data_3/Protected/Strikes/2015/04/18/17/40.json
+timed calls took 0.085 for 1005 executions in 10.066 seconds.
+1005 lines read. 1005 lines written to cache/strikes.txt.
+
+fetching new stations file at http://user:pass-omitted@data.blitzortung.org/Data_3/Protected/stations.json.gz
+Wrote 127 lines to cache/stations.txt.
+Stations file fetch took 0.532 seconds for 127 stations.
+
+Generating image from NorthAmerica.png w=623 h=454.
+Generating thumbnail w=320 h=233.
+Drawing strikes for BONorthAmerica.png.
+27713 strike lines processed.  27143 drawn on map using 0.150 secs.
+127 stations in Blitzortung region 3. Drew 111 stations within our map area.
+Legend drawn for 5 types of station status.
+Image saved to cache/BONorthAmerica.png.
+Image -sm saved to cache/BONorthAmerica-sm.png.
+HTML map area written to cache/BONorthAmerica-map.html.
+Completed BONorthAmerica.png generation in 3 seconds.
+
+Starting animated GIF on cache/BONorthAmerica-ani.gif height=454 width=623
+ created missing  cache/BONorthAmerica_9.png 
+ created missing  cache/BONorthAmerica_8.png 
+ created missing  cache/BONorthAmerica_7.png 
+ created missing  cache/BONorthAmerica_6.png 
+ created missing  cache/BONorthAmerica_5.png 
+ created missing  cache/BONorthAmerica_4.png 
+ created missing  cache/BONorthAmerica_3.png 
+ created missing  cache/BONorthAmerica_2.png 
+ created missing  cache/BONorthAmerica_1.png 
+ created missing  cache/BONorthAmerica_10.png 
+Animated GIF saved to cache/BONorthAmerica-ani.gif.
+Animated GIF processing completed for cache/BONorthAmerica-ani.gif in 1 seconds.
+
+Starting animated GIF on cache/BONorthAmerica-sm-ani.gif height=233 width=320
+ created missing  cache/BONorthAmerica-sm_9.png 
+ created missing  cache/BONorthAmerica-sm_8.png 
+ created missing  cache/BONorthAmerica-sm_7.png 
+ created missing  cache/BONorthAmerica-sm_6.png 
+ created missing  cache/BONorthAmerica-sm_5.png 
+ created missing  cache/BONorthAmerica-sm_4.png 
+ created missing  cache/BONorthAmerica-sm_3.png 
+ created missing  cache/BONorthAmerica-sm_2.png 
+ created missing  cache/BONorthAmerica-sm_1.png 
+ created missing  cache/BONorthAmerica-sm_10.png 
+Animated GIF saved to cache/BONorthAmerica-sm-ani.gif.
+Animated GIF processing completed for cache/BONorthAmerica-sm-ani.gif in 1 seconds.
+
+Rotating stations file(s)
+ created missing  cache/stations_9.txt 
+ created missing  cache/stations_8.txt 
+ created missing  cache/stations_7.txt 
+ created missing  cache/stations_6.txt 
+ created missing  cache/stations_5.txt 
+ created missing  cache/stations_4.txt 
+ created missing  cache/stations_3.txt 
+ created missing  cache/stations_2.txt 
+ created missing  cache/stations_1.txt 
+ created missing  cache/stations_10.txt 
+ saved new cache/stations_1.txt 
+Rotation complete for stations file(s).
+Elapsed time 224 seconds.
+Log written to cache/gen-BO-maps-log.txt.

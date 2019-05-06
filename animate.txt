@@ -1,0 +1,16 @@
+#!/bin/bash
+# generic bash script for gen-BO-maps.php.  K. True - saratoga-weather.org
+# Version 1.00 - 18-Apr-2015 - initial release
+#
+# --- begin settings
+# set HDIR to full file path to BOmaps directory on your website
+HDIR=/kunden/homepages/9/d141952417/htdocs/wx/BOmaps
+
+# set PHPcmd to full path to PHP V5+ on your host
+PHPcmd=/usr/bin/php
+
+# --- end settings
+#
+cd $HDIR
+$PHPcmd -q gen-BO-maps.php > status.txt 2>&1
+#
