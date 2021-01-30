@@ -8,8 +8,9 @@
 #  Version 1.01 - 21-Apr-2015 - added $numimages variable to correspond to images in GIF 
 #  Version 1.02 - 20-May-2015 - corrected $BOcacheDir to 'cache/', added debug info to output
 #  Version 1.03 - 30-Oct-2018 - adjusted for new format of stations file JSON
+#  Version 1.04 - 29-Jan-2021 - disabled stats display as they're not included in JSON
 #--------------------------------------------------------------------------------
-$Version = 'BO-stations-inc - V1.03 - 30-Oct-2018';
+$Version = 'BO-station-inc - V1.04 - 29-Jan-2021';
 $Credits = 'script by saratoga-weather.org';
 
 #--------------------configure to match gen-BO-maps.php settings ----------------
@@ -19,6 +20,8 @@ $numimages = 12;  # set this the same as in gen_BO_maps.php file
 $ourTZ = 'America/New_York';
 $timeFormat = "d-M H:i:s T";
 #--------------------end configure-----------------------------------------------
+$showStats = false; # =true; show stats display; =false; omit stats display
+global $showStats;
 print "<!-- $Version -->\n";
 
 if(!isset($_GET['station']) or ! preg_match('|^[0-9]+$|',$_GET['station']) ) {
@@ -208,7 +211,9 @@ for ($i=0;$i<=5;$i++) {
 		print "</td>\n";
 	}
 */
-	if($S['input'][$i]['board'] != '?' and $S['input'][$i]['gain'] != '-1.-1') {
+	if($S['input'][$i]['board'] != '?' and 
+	   isset($S['input'][$i]['gain'])  and 
+	   $S['input'][$i]['gain'] != '-1.-1') {
 		$iplus = $i+1;
 		print "<td style=\"vertical-align: text-top;\">";
 		print "Input $iplus<br/>";
@@ -236,22 +241,26 @@ print "<div class=\"BOtable\">\n";
 print "<table width=\"100%\" class=\"BOdetail\">\n";
 
 print "<tr><th colspan=\"5\">&nbsp</th>";
-print "<th colspan=\"9\">Number of strikes detected by the station and network at distance<br/>around the station for prior 60 minutes</th></tr>\n";
+if($showStats) {
+  print "<th colspan=\"9\">Number of strikes detected by the station and network at distance<br/>around the station for prior 60 minutes</th></tr>\n";
+}
 print "<tr>\n";
 print " <th>Time</th>\n";
 print " <th>Status</th>\n";
 print " <th>signals</th>\n";
 print " <th>last_signal</th>\n";
 print " <th>last_strike</th>\n";
-print " <th>50 km<br/>Station</th>\n";
-print " <th>50 km<br/>Network</th>\n";
-print " <th>50 km<br/>Eff.</th>\n";
-print " <th>500 km<br/>Station</th>\n";
-print " <th>500 km<br/>Network</th>\n";
-print " <th>500 km<br/>Eff.</th>\n";
-print " <th>5000 km<br/>Station</th>\n";
-print " <th>5000 km<br/>Network</th>\n";
-print " <th>5000 km<br/>Eff.</th>\n";
+if($showStats) {
+	print " <th>50 km<br/>Station</th>\n";
+	print " <th>50 km<br/>Network</th>\n";
+	print " <th>50 km<br/>Eff.</th>\n";
+	print " <th>500 km<br/>Station</th>\n";
+	print " <th>500 km<br/>Network</th>\n";
+	print " <th>500 km<br/>Eff.</th>\n";
+	print " <th>5000 km<br/>Station</th>\n";
+	print " <th>5000 km<br/>Network</th>\n";
+	print " <th>5000 km<br/>Eff.</th>\n";
+}
 print "</tr>\n";
 
 for ($i=1;$i<=$numimages;$i++) { // loop over the files;
@@ -289,15 +298,17 @@ if(isset($StationsJSON[$req_station])) {
 	print " <td>".$S['signals']."</td>\n";
 	print " <td>".decode_time($timeFormat,$S['last_signal'])."</td>\n";
 	print " <td>".decode_time($timeFormat,$S['last_strike'])."</td>\n";
-	print " <td>".$S['50_km_60_m']."</td>\n";
-	print " <td>".$S['50_km_60_m_a']."</td>\n";
-	print " <td>".sprintf("%01.1f",round($S['50_km_60_m_e'],1))."%</td>\n";
-	print " <td>".$S['500_km_60_m']."</td>\n";
-	print " <td>".$S['500_km_60_m_a']."</td>\n";
-	print " <td>".sprintf("%01.1f",round($S['500_km_60_m_e'],1))."%</td>\n";
-	print " <td>".$S['5000_km_60_m']."</td>\n";
-	print " <td>".$S['5000_km_60_m_a']."</td>\n";
-	print " <td>".sprintf("%01.1f",round($S['5000_km_60_m_e'],1))."%</td>\n";
+	if($showStats) { 
+		print " <td>".$S['50_km_60_m']."</td>\n";
+		print " <td>".$S['50_km_60_m_a']."</td>\n";
+		print " <td>".sprintf("%01.1f",round($S['50_km_60_m_e'],1))."%</td>\n";
+		print " <td>".$S['500_km_60_m']."</td>\n";
+		print " <td>".$S['500_km_60_m_a']."</td>\n";
+		print " <td>".sprintf("%01.1f",round($S['500_km_60_m_e'],1))."%</td>\n";
+		print " <td>".$S['5000_km_60_m']."</td>\n";
+		print " <td>".$S['5000_km_60_m_a']."</td>\n";
+		print " <td>".sprintf("%01.1f",round($S['5000_km_60_m_e'],1))."%</td>\n";
+	}
 /*
     [signals] => 1853
     [last_signal] => 2015-04-16 20:13:04
@@ -366,7 +377,7 @@ function decode_status($status) {
 }
 
 function decode_time($dateFormat, $timetext ) {
-	$tstamp = strtotime($timetext);
+	$tstamp = strtotime($timetext.' UTC');
 	if($tstamp > 1000) {
 		return(date($dateFormat,$tstamp));
 	} else {
