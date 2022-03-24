@@ -9,8 +9,9 @@
 #  Version 1.02 - 20-May-2015 - corrected $BOcacheDir to 'cache/', added debug info to output
 #  Version 1.03 - 30-Oct-2018 - adjusted for new format of stations file JSON
 #  Version 1.04 - 29-Jan-2021 - disabled stats display as they're not included in JSON
+#  Version 1.05 - 10-Mar-2021 - changed link URL for station statistics detail
 #--------------------------------------------------------------------------------
-$Version = 'BO-station-inc - V1.04 - 29-Jan-2021';
+$Version = 'BO-station-inc - V1.05 - 10-Mar-2021';
 $Credits = 'script by saratoga-weather.org';
 
 #--------------------configure to match gen-BO-maps.php settings ----------------
@@ -344,7 +345,9 @@ function do_print_header($S) {
 #	print 'Latitude <strong>'.$S['latitude'].'</strong> Longitude <strong>'.$S['longitude'].'</strong> Altitude <strong>'.$S['altitude']."m</strong><br/>\n";
 	print 'Controller <strong>'.$S['controller_board'].'</strong> Firmware <strong>'.$S['firmware']."</strong><br/>\n";
 	print 'Comments: <strong>'.$S['comments']."</strong><br/>\n";
-	print "Details at <a href=\"http://www.myblitzortung.de/blitzortung/station.php?bo_page=statistics&amp;bo_show=station&amp;bo_station_id=".$S['station']."&amp;bo_lang=en\" target=\"_blank\"><strong>Blitzortung.org</strong></a><br/>\n";
+//	print "Details at <a href=\"http://www.myblitzortung.de/blitzortung/station.php?bo_page=statistics&amp;bo_show=station&amp;bo_station_id=".$S['station']."&amp;bo_lang=en\" target=\"_blank\"><strong>Blitzortung.org</strong></a><br/>\n";
+	print "Details at <a href=\"https://map.blitzortung.org/statistic_0.php?station=".$S['station']."&amp;0_background_transparent=1&amp;1_background_transparent=1&amp;2_background_transparent=1
+\" target=\"_blank\"><strong>Blitzortung.org</strong></a><br/>\n";
 	print "</p>\n";
 
   return('');

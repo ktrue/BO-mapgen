@@ -34,8 +34,10 @@
 #  Version 1.05 - 30-Oct-2018
 #    added fetch for MOTD message on blitzortung.org. Save to $BOcacheDir.BOmotd.txt
 #    changed for new stations JSON format
+#  Version 1.07 - 23-Mar-2022
+#    added code to optionally use last_strikes.php query instead of 10-minute JSON files
 #--------------------------------------------------------------------------------
-$Version = 'BOmapgen - V1.05 - 30-Oct-2018';
+$Version = 'BOmapgen - V1.07 - 23-Mar-2022';
 $Credits = 'script by saratoga-weather.org';
 $mainURL = 'data.blitzortung.org';
 #$mainURL = 'data2.blitzortung.org';
@@ -43,6 +45,7 @@ $mainURL = 'data.blitzortung.org';
 #$mainURL = '217.145.98.148';  // data.blitzortung.org IP
 #$mainURL = '213.32.62.243';   // data.lightningmaps.org
 
+$useQuery = true; // =true; to use last_strikes.php query; =false; to use old 10-minute files queries
 $BOMainURL = 'http://en.blitzortung.org/live_lightning_maps.php?map=30';
 $BOmsgFile = $BOcacheDir.'BOmotd.txt';
 
@@ -53,14 +56,21 @@ if(!isset($MapList) or count($MapList) < 1) {
 if(!isset($username) or $username == 'username') {
    exit  ("$Version\nError: missing a valid Blitzortung \$username and \$password.\n");
 }
-log_msg("$Version\n");
+log_msg("$Version - $Credits\n");
 include_once("GIFEncoder.class.php");// This needs to be in the same folder as this script
 //
 // strikes and stations path
 //
-$strikes_dir= 'http://' . $username . ':' . $password . '@'.$mainURL.'/Data_' . $region . '/Protected/Strikes/';
-$stations_file= 'http://' . $username . ':' . $password . '@'.$mainURL.'/Data_' . $region . '/Protected/stations.json.gz';
+# old $strikes_dir= 'http://' . $username . ':' . $password . '@'.$mainURL.'/Data_' . $region . '/Protected/Strikes/';
+# new https://loginname:password@data.blitzortung.org/Data/Protected/Strikes_1/2013/08/08/10/30.json.gz
+$strikes_dir= 'https://' . $username . ':' . $password . '@'.$mainURL.'/Data/Protected/Strikes_' . $region . '/';
 
+# old $stations_file= 'http://' . $username . ':' . $password . '@'.$mainURL.'/Data_/' . $region . '/Protected/stations.json.gz';
+# new https://loginname:password@data.blitzortung.org/Data/Protected/stations.txt.gz
+$stations_file= 'https://' . $username . ':' . $password . '@'.$mainURL.'/Data/Protected/stations.json.gz';
+
+# V1.07 - add query with last_strikes.php
+$strikes_query = 'https://' . $username . ':' . $password . '@'.$mainURL.'/Data/Protected/last_strikes.php?number=999999';
 
 //
 // times
@@ -73,14 +83,31 @@ if (!function_exists('date_default_timezone_set')) {
   } else {
    date_default_timezone_set($ourTZ);
  }
+
+$end_time= time();
+$ourStart = time();
+
+$numimages = isset($numimages)?$numimages:12; // default of 12 images
+$maxFilesize = isset($maxFilesize)?$maxFilesize*1048576:200*1048576; //default = 200MB size
+log_msg("Parms: URLPath='$URLpath' for map gen\n");
+log_msg("Parms: using cache directory of '$BOcacheDir'\n");
+log_msg("Parms: maxFilesize='" . show_size($maxFilesize) . "' for $local_strikes_file\n");
+log_msg("Parms: ourTZ='$ourTZ'\n");
+log_msg("Running on " . phpversion()."\n");
 #
 # fetch and save the MOTD if any from the Blitzortung.org website.
 
-$BOhtml = file_get_contents($BOMainURL);
+$BOhtml = @file_get_contents($BOMainURL);
 
-if(preg_match('!<div id="motd".*>(.*)</div>!Uis',$BOhtml,$matches)) {
+if(preg_match('!<div id="motd".*>(.*)</div>!Uis',$BOhtml,$matches) and 
+   ! preg_match('|^Network for Lightning|i',$matches[1])) {
 	$BOmsg = 'Blitzortung.org message: <strong>'.trim(strip_tags($matches[1])).'</strong>';
 	log_msg('BO MOTD: \''.$BOmsg."'\n");
+	if(preg_match('/Real time lightning map/is',$BOmsg) or 
+	   preg_match('/Make a donation for Blitzortung.org/is',$BOmsg)) {
+		$BOmsg = '';
+		log_msg("BO MOTD: omitted about Forum message.\n");
+	}
 } else {
 	$BOmsg = '';
 }
@@ -93,16 +120,35 @@ if($twrite !== false) {
 }
 #
 # 
-$end_time= time();
-$ourStart = time();
 
-$numimages = isset($numimages)?$numimages:12; // default of 12 images
-$maxFilesize = isset($maxFilesize)?$maxFilesize*1048576:200*1048576; //default = 200MB size
-
-log_msg("Parms: URLPath='$URLpath' for map gen\n");
-log_msg("Parms: maxFilesize='" . show_size($maxFilesize) . "' for $local_strikes_file\n");
-log_msg("Parms: ourTZ='$ourTZ'\n");
-log_msg("Running PHP " . phpversion()."\n");
+if($useQuery) {
+	log_msg("Parms: using last_strikes.php query method for strikes\n");
+	$queryStart = (string)($ourStart - $time_interval - 1); #.'000000000'; // earliest data needed in nanoseconds
+	// new: find needed NW, SE coords needed for query
+	$qNorth = -90;
+	$qWest  = 180;
+	$qSouth = 90;
+	$qEast  = -180;
+	log_msg("\$Maplist used:\n");
+	foreach ($MapList as $i => $rec) {
+		# base-map|generated-map-name|north,west,south,east|legend-loc|GR3placefile|thumbnail-width|
+		list($v1,$v2,$coords,$v5) = explode('|',$rec.'||||||');
+		list($tN,$tW,$tS,$tE) = explode(',',$coords.',,,,');
+		log_msg("  '$rec'\n");
+		#log_msg(" N=$tN, W=$tW,  S=$tS,E=$tE\n");
+		if(is_numeric($tN) and $tN >= $qNorth) {$qNorth = $tN;}
+		if(is_numeric($tW) and $tW <= $qWest)  {$qWest  = $tW;}
+		if(is_numeric($tS) and $tS <= $qSouth) {$qSouth = $tS;}
+		if(is_numeric($tE) and $tE >= $qEast)  {$qEast  = $tE;}
+	}
+	
+	log_msg("\$MapList scan has N=$qNorth,W=$qWest and S=$qSouth,E=$qEast for overall map coordinates.\n");
+	
+	$strikes_query .= "&north=$qNorth&west=$qWest&south=$qSouth&east=$qEast&sig=0&time=$queryStart";
+	$sFilename = preg_replace('|//([^@]+)@|','//user:pass-omitted@',$strikes_query);
+	
+	log_msg("Query='$sFilename'\n");
+} # end $useQuery
 
 $fileOversize = (file_exists($local_strikes_file) and filesize($local_strikes_file) > $maxFilesize)?true:false;
 
@@ -122,144 +168,191 @@ if(!file_exists($local_strikes_file) or $fileOversize) {
   $run_time = $end_time - $time_interval;
   $l_time = $$end_time - $time_interval -1;
 } 
-if(file_exists($local_strikes_file) and !$fileOversize) {
-  $lFileSize = filesize($local_strikes_file);
-  log_msg("start processing for region $region data ".date("D, d M Y H:i:s", $ourStart)."\n");
-  log_msg("current $local_strikes_file strikes file size is ".show_size($lFileSize)."\n");
-  if (filemtime($local_strikes_file) < $end_time-60) {
-	touch ($local_strikes_file);
-	$first_time = 0;
-	$l_time= $end_time-$time_interval;
-	$l_file= @fopen($local_strikes_file, 'r');
-	$t_file= @fopen($tmp_strikes_file, 'w');
-	while ($line= fgets ($l_file)) {
-	  if(substr($line,0,1) == "{") { # JSON format
-		$strike= json_decode($line);
-		$strike->time/= 1000000000;
-		$l_time = $strike->time;
-		$strike_time = $l_time;
-		$strike_lat = $strike->lat;
-		$strike_lon = $strike->lon;
-	  } else { # in text format
-	    list($strike_time,$strike_lat,$strike_lon) = explode('|',trim($line).'|||');
-	  }
-	 
-	  if(!$first_time) {$first_time = $l_time; }
-	  if ($strike_time >= $end_time-$time_interval) {
-		$nline = "$strike_time|$strike_lat|$strike_lon\n";
-		fwrite ($t_file, $nline);
-		$l_time= $strike_time;
-	  }
-	}
-	fclose ($l_file);
-	fclose ($t_file);
-	rename ($tmp_strikes_file,$local_strikes_file);
-	log_msg("$local_strikes_file filtered for old data\n");
-	log_msg("First data: ".date("D, d M Y H:i:s", $first_time)."\n");
-	log_msg("Last data : ".date("D, d M Y H:i:s", $l_time)."\n");
-  
-}
-  if($l_time > $end_time - $time_interval) {
-    $run_time= $l_time;
-    log_msg("data freshen starting from ".date("D, d M Y H:i:s", $run_time)."\n");
-  } else {
-	$run_time = $end_time - $time_interval;
-	$l_time = $end_time - $time_interval;
-    log_msg("old data - restart collection from ".date("D, d M Y H:i:s", $run_time)."\n");
-  }
-  $l_file= fopen($local_strikes_file, 'a');
-  $opts = array(
-	'http'=>array(
-	  'method'=>"GET",
-	  'protocol_version' => 1.1,
-	  'header'=> 
-		  //  "Hostname: data.blitzortung.org\r\n" . 
-		    "Cache-Control: no-cache, must-revalidate\r\n" . 
-				"Cache-control: max-age=0\r\n" .
-				"Connection: close\r\n" . 
-				"User-agent: Mozilla 5.0 (BOmapgen)\r\n" . 
-         "Accept: text/html,text/plain\r\n"
-	)
-  );
 
-  $context = stream_context_create($opts);
-//error_reporting(E_ALL);
-  while ($run_time < $end_time+600) {
-    $filename= $strikes_dir . gmdate("Y/m/d/H/",$run_time) . $run_time/600%6 . '0.json';
-	$sFilename = preg_replace('|//([^@]+)@|','//user:pass-omitted@',$filename);
-	log_msg("fetching new strikes file at $sFilename\n");
-	$nLines = 0;
-	$nWritten = 0;
-	$total_time = 0;
-	$T_begin = microtime(true);
-    $lines = @file($filename,0,$context);
-    $headerarray = get_headers($filename,1);
-	if(!preg_match('| 200 |',$headerarray[0])) {
-	  log_msg("Headers returned from $sFilename\n".print_r($headerarray,true)."\n");
+if(!$useQuery) { #----------- process strikes from 10-minute JSON files
+	log_msg("Parms: using 10-minute JSON files for strikes.\n");
+
+	if(file_exists($local_strikes_file) and !$fileOversize) {
+		$lFileSize = filesize($local_strikes_file);
+		log_msg("start processing for region $region data ".date("D, d M Y H:i:s", $ourStart)."\n");
+		log_msg("current $local_strikes_file strikes file size is ".show_size($lFileSize)."\n");
+		if (filemtime($local_strikes_file) < $end_time-60) {
+		touch ($local_strikes_file);
+		$first_time = 0;
+		$l_time= $end_time-$time_interval;
+		$l_file= @fopen($local_strikes_file, 'r');
+		$t_file= @fopen($tmp_strikes_file, 'w');
+		while ($line= fgets ($l_file)) {
+			if(substr($line,0,1) == "{") { # JSON format
+			$strike= json_decode($line);
+			$strike->time/= 1000000000;
+			$l_time = $strike->time;
+			$strike_time = $l_time;
+			$strike_lat = $strike->lat;
+			$strike_lon = $strike->lon;
+			} else { # in text format
+				list($strike_time,$strike_lat,$strike_lon) = explode('|',trim($line).'|||');
+			}
+		 
+			if(!$first_time) {$first_time = $l_time; }
+			if ($strike_time >= $end_time-$time_interval) {
+			$nline = "$strike_time|$strike_lat|$strike_lon\n";
+			fwrite ($t_file, $nline);
+			$l_time= $strike_time;
+			}
+		}
+		fclose ($l_file);
+		fclose ($t_file);
+		rename ($tmp_strikes_file,$local_strikes_file);
+		log_msg("$local_strikes_file filtered for old data\n");
+		log_msg("First data: ".date("D, d M Y H:i:s", $first_time)."\n");
+		log_msg("Last data : ".date("D, d M Y H:i:s", $l_time)."\n");
+		
 	}
-	$T_end = microtime(true);
-	if(is_array($lines) and count($lines) > 0) {
-//    if($file= fopen($filename, 'r')) {
-	  $number_calls = 0;
-      foreach ($lines as $line) {
-//      while ($line= fgets ($file)) {
-		$nLines++;
- 	  $time_start = microtime(true);
-	  $number_calls++;
-        $json= json_decode($line);
-        $json->time /= 1000000000;
-	  $time_stop = microtime(true);
-	  $total_time += ($time_stop - $time_start);
-        if ($json->time >= $l_time) {
-		  $strike_time = $json->time;
-		  $strike_lat = $json->lat;
-		  $strike_lon = $json->lon;
-		  $nline = "$strike_time|$strike_lat|$strike_lon\n";
-          fwrite ($l_file, $nline);
-		  $nWritten++;
-        }
-      }
-	  $time_elapsed = sprintf("%01.3f",round($total_time,3));
-	  $time_overall = sprintf("%01.3f",round($T_end-$T_begin,3));
-	  
-	  log_msg("timed calls took $time_elapsed for $number_calls executions in $time_overall seconds.\n");
-	  log_msg("$nLines lines read. $nWritten lines written to $local_strikes_file.\n\n");
-//      fclose ($file);
-    } else {
-	  $nLines = 0;
+		if($l_time > $end_time - $time_interval) {
+			$run_time= $l_time;
+			log_msg("data freshen starting from ".date("D, d M Y H:i:s", $run_time)."\n");
+		} else {
+		$run_time = $end_time - $time_interval;
+		$l_time = $end_time - $time_interval;
+			log_msg("old data - restart collection from ".date("D, d M Y H:i:s", $run_time)."\n");
+		}
+		$l_file= fopen($local_strikes_file, 'a');
+		$opts = array(
+		'http'=>array(
+			'method'=>"GET",
+			'protocol_version' => 1.1,
+			'timeout' => 8.0,
+			'header'=> 
+				//  "Hostname: data.blitzortung.org\r\n" . 
+					"Cache-Control: no-cache, must-revalidate\r\n" . 
+					"Cache-control: max-age=0\r\n" .
+					"Connection: close\r\n" . 
+					"User-agent: Mozilla 5.0 (BOmapgen)\r\n" . 
+					 "Accept: text/html,text/plain\r\n"
+		)
+		);
+	
+		$context = stream_context_create($opts);
+	//error_reporting(E_ALL);
+		while ($run_time < $end_time+600) {
+			$filename= $strikes_dir . gmdate("Y/m/d/H/",$run_time) . $run_time/600%6 . '0.json';
+		$sFilename = preg_replace('|//([^@]+)@|','//user:pass-omitted@',$filename);
+		log_msg("fetching new strikes file at $sFilename\n");
+		$nLines = 0;
+		$nWritten = 0;
+		$total_time = 0;
+		$T_begin = microtime(true);
+			$lines = @file($filename,0,$context);
+			$headerarray = @get_headers($filename,1,$context);
+		if(is_array($headerarray) and !preg_match('| 200 |',$headerarray[0])) {
+			log_msg("Headers returned from $sFilename\n".print_r($headerarray,true)."\n");
+		}
+		$T_end = microtime(true);
+		if(is_array($lines) and count($lines) > 0) {
+	//    if($file= fopen($filename, 'r')) {
+			$number_calls = 0;
+				foreach ($lines as $line) {
+	//      while ($line= fgets ($file)) {
+			$nLines++;
+			$time_start = microtime(true);
+			$number_calls++;
+					$json= json_decode($line);
+					$json->time /= 1000000000;
+			$time_stop = microtime(true);
+			$total_time += ($time_stop - $time_start);
+					if ($json->time >= $l_time) {
+				$strike_time = $json->time;
+				$strike_lat = $json->lat;
+				$strike_lon = $json->lon;
+				$nline = "$strike_time|$strike_lat|$strike_lon\n";
+						fwrite ($l_file, $nline);
+				$nWritten++;
+					}
+				}
+			$time_elapsed = sprintf("%01.3f",round($total_time,3));
+			$time_overall = sprintf("%01.3f",round($T_end-$T_begin,3));
+			
+			log_msg("timed calls took $time_elapsed for $number_calls executions in $time_overall seconds.\n");
+			log_msg("$nLines lines read. $nWritten lines written to $local_strikes_file.\n\n");
+	//      fclose ($file);
+			} else {
+			$nLines = 0;
+			$nWritten = 0;
+				$gzfilename= $strikes_dir . gmdate("Y/m/d/H/",$run_time) . $run_time/600%6 . '0.json.gz';
+			$sFilename = preg_replace('|//([^@]+)@|','//user:pass-omitted@',$gzfilename);
+			log_msg("fetching new GZ strikes file at $sFilename\n");
+				$file= @gzopen($gzfilename, 'r');
+				$headerarray = @get_headers($gzfilename,1,$context);
+			if(is_array($headerarray) and !preg_match('| 200 |',$headerarray[0])) {
+				log_msg("Headers returned from $sFilename\n".print_r($headerarray,true)."\n");
+			}
+			if($file) {
+					while ($line= gzgets ($file)) {
+				$nLines++;
+						$json= json_decode($line);
+						$json->time /= 1000000000;
+						if ($json->time >= $l_time) {
+				$strike_time = $json->time;
+				$strike_lat = $json->lat;
+				$strike_lon = $json->lon;
+				$nline = "$strike_time|$strike_lat|$strike_lon\n";
+							fwrite ($l_file, $nline);
+				$nWritten++;
+						}
+					}
+			log_msg("$nLines GZ lines read. $nWritten lines written to $local_strikes_file.\n\n");
+					gzclose ($file);
+				}
+			}
+			$run_time+= 600;
+		}
+		fclose ($l_file);
+	}
+		log_msg("after refresh, $local_strikes_file strikes file size is ".show_size(filesize($local_strikes_file))."\n\n");
+	
+	} else { # -------------------- use new query method
+	$T_begin = microtime(true);
+  $rawStrikes = file($strikes_query);
+  $T_end = microtime(true);
+	file_put_contents('./returned.txt',$rawStrikes);
+	$l_file= @fopen($local_strikes_file, 'w');
+	krsort($rawStrikes); # put in cronological order
+	$T_elapsed = sprintf("%01.3f",round($T_end-$T_begin,3));
+	log_msg("Query took $T_elapsed seconds\n");
+	$first_strike_time = 0;
+	$last_strike_time = 0;
+	 
+	if($rawStrikes !== false and is_array($rawStrikes)) {
 	  $nWritten = 0;
-      $gzfilename= $strikes_dir . gmdate("Y/m/d/H/",$run_time) . $run_time/600%6 . '0.json.gz';
-	  $sFilename = preg_replace('|//([^@]+)@|','//user:pass-omitted@',$gzfilename);
-	  log_msg("fetching new GZ strikes file at $sFilename\n");
-      $file= @gzopen($gzfilename, 'r');
-      $headerarray = get_headers($gzfilename,1);
-	  if(!preg_match('| 200 |',$headerarray[0])) {
-	    log_msg("Headers returned from $sFilename\n".print_r($headerarray,true)."\n");
-	  }
-	  if($file) {
-        while ($line= gzgets ($file)) {
-		  $nLines++;
-          $json= json_decode($line);
-          $json->time /= 1000000000;
-          if ($json->time >= $l_time) {
+		$T_QPStart = microtime(true);
+		foreach ($rawStrikes as $i => $line) {
+      $json= json_decode($line);
+      $json->time /= 1000000000;
 			$strike_time = $json->time;
+			if($first_strike_time == 0) {$first_strike_time = $strike_time; }
+			$last_strike_time = $strike_time;
 			$strike_lat = $json->lat;
 			$strike_lon = $json->lon;
 			$nline = "$strike_time|$strike_lat|$strike_lon\n";
-            fwrite ($l_file, $nline);
+      fwrite ($l_file, $nline);
 			$nWritten++;
-          }
-        }
-		log_msg("$nLines GZ lines read. $nWritten lines written to $local_strikes_file.\n\n");
-        gzclose ($file);
-      }
-    }
-    $run_time+= 600;
-  }
-  fclose ($l_file);
-}
-  log_msg("after refresh, $local_strikes_file strikes file size is ".show_size(filesize($local_strikes_file))."\n\n");
+		}
+		$T_QPend = microtime(true);
+		$T_QPtotal = sprintf("%01.3f",round($T_QPend-$T_QPStart,3));
+		log_msg("Query returned $nWritten strikes .. saved to $local_strikes_file\n");
+		$T_firstStrike = date("D, d M Y H:i:s",$first_strike_time);
+		$T_lastStrike =  date("D, d M Y H:i:s",$last_strike_time);
+		$T_strikeCoverage = $last_strike_time - $first_strike_time;
+		log_msg("Query processing took $T_QPtotal seconds.\n");
+		log_msg("Strikes from $T_firstStrike to $T_lastStrike ($T_strikeCoverage seconds)\n");
+	} else {
+		log_msg("Query returned no strikes.\n");
+	}
+  fclose($l_file);
 	
+} # ----------------------------end new query method
+
 if(filesize($local_strikes_file) < 100) {
 	$doNoDataMsg = true;
 } else {
@@ -275,8 +368,8 @@ $nLines = 0;
 $T_begin = microtime(true);
 $StationList = @gzfile($stations_file);
 $T_end = microtime(true);
-$headerarray = get_headers($stations_file,1);
-if(!preg_match('| 200 |',$headerarray[0])) {
+$headerarray = @get_headers($stations_file,1,$context);
+if(is_array($headerarray) and !preg_match('| 200 |',$headerarray[0])) {
   log_msg("Headers returned from $sFilename\n".print_r($headerarray,true)."\n");
 }
 if(!is_array($StationList)) {
@@ -314,7 +407,9 @@ log_msg("Stations file fetch took $time_overall seconds for $nRecs records.\n");
 	}
   log_msg("Station list JSON decode return $error\n");
  }
-	log_msg("StationsJSON lists ".count($StationsJSON)." entries.\n\n");
+ if(is_array($StationsJSON)) {
+	log_msg("StationsJSON lists ".@count($StationsJSON)." entries.\n\n");
+ }
 	
 	//log_msg("Dump of StationsJSON\n\n".print_r($StationsJSON,true)."\n\n");
 /*
