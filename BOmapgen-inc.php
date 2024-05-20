@@ -1,4 +1,6 @@
 <?php
+error_reporting(E_ALL);
+ini_set('display_errors','1');
 #--------------------------------------------------------------------------------
 # BOmapgen - freshen the stroke/stations files, generate the map
 #
@@ -36,8 +38,12 @@
 #    changed for new stations JSON format
 #  Version 1.07 - 23-Mar-2022
 #    added code to optionally use last_strikes.php query instead of 10-minute JSON files
+#  Version 1.08 - 26-Apr-2023
+#    added code to produce placefile with UTC timestamps as {filename}UTC.{ext}
+#  Version 1.09 - 19-May-2024
+#    changed imagefilledpolygon() calls for PHP 8.0+ for Deprecated errata
 #--------------------------------------------------------------------------------
-$Version = 'BOmapgen - V1.07 - 23-Mar-2022';
+$Version = 'BOmapgen - V1.09 - 19-May-2024';
 $Credits = 'script by saratoga-weather.org';
 $mainURL = 'data.blitzortung.org';
 #$mainURL = 'data2.blitzortung.org';
@@ -45,8 +51,8 @@ $mainURL = 'data.blitzortung.org';
 #$mainURL = '217.145.98.148';  // data.blitzortung.org IP
 #$mainURL = '213.32.62.243';   // data.lightningmaps.org
 
-$useQuery = true; // =true; to use last_strikes.php query; =false; to use old 10-minute files queries
-$BOMainURL = 'http://en.blitzortung.org/live_lightning_maps.php?map=30';
+$useQuery = false; // =true; to use last_strikes.php query; =false; to use old 10-minute files queries
+$BOMainURL = 'https://en.blitzortung.org/live_lightning_maps.php?map=30';
 $BOmsgFile = $BOcacheDir.'BOmotd.txt';
 
 
@@ -89,11 +95,14 @@ $ourStart = time();
 
 $numimages = isset($numimages)?$numimages:12; // default of 12 images
 $maxFilesize = isset($maxFilesize)?$maxFilesize*1048576:200*1048576; //default = 200MB size
-log_msg("Parms: URLPath='$URLpath' for map gen\n");
+log_msg("Run date: ".date('r')."\n");
+log_msg("Running on PHP " . phpversion()."\n");
+log_msg("Script path:   ".__FILE__."\n");
+log_msg("Parms: URLPath='$URLpath' for map generation\n");
 log_msg("Parms: using cache directory of '$BOcacheDir'\n");
 log_msg("Parms: maxFilesize='" . show_size($maxFilesize) . "' for $local_strikes_file\n");
 log_msg("Parms: ourTZ='$ourTZ'\n");
-log_msg("Running on " . phpversion()."\n");
+log_msg("Parms: $numimages images to be used.\n");
 #
 # fetch and save the MOTD if any from the Blitzortung.org website.
 
@@ -205,17 +214,17 @@ if(!$useQuery) { #----------- process strikes from 10-minute JSON files
 		fclose ($t_file);
 		rename ($tmp_strikes_file,$local_strikes_file);
 		log_msg("$local_strikes_file filtered for old data\n");
-		log_msg("First data: ".date("D, d M Y H:i:s", $first_time)."\n");
-		log_msg("Last data : ".date("D, d M Y H:i:s", $l_time)."\n");
+		log_msg("First data: ".date("D, d M Y H:i:s T", $first_time)."\n");
+		log_msg("Last data : ".date("D, d M Y H:i:s T", (integer)$l_time)."\n");
 		
 	}
 		if($l_time > $end_time - $time_interval) {
 			$run_time= $l_time;
-			log_msg("data freshen starting from ".date("D, d M Y H:i:s", $run_time)."\n");
+			log_msg("data freshen starting from ".date("D, d M Y H:i:s T", (integer)$run_time)."\n");
 		} else {
 		$run_time = $end_time - $time_interval;
 		$l_time = $end_time - $time_interval;
-			log_msg("old data - restart collection from ".date("D, d M Y H:i:s", $run_time)."\n");
+			log_msg("old data - restart collection from ".date("D, d M Y H:i:s T", $run_time)."\n");
 		}
 		$l_file= fopen($local_strikes_file, 'a');
 		$opts = array(
@@ -236,7 +245,7 @@ if(!$useQuery) { #----------- process strikes from 10-minute JSON files
 		$context = stream_context_create($opts);
 	//error_reporting(E_ALL);
 		while ($run_time < $end_time+600) {
-			$filename= $strikes_dir . gmdate("Y/m/d/H/",$run_time) . $run_time/600%6 . '0.json';
+		$filename= $strikes_dir . gmdate("Y/m/d/H/",intval($run_time)) . intval(fmod($run_time/600,6)) . '0.json';
 		$sFilename = preg_replace('|//([^@]+)@|','//user:pass-omitted@',$filename);
 		log_msg("fetching new strikes file at $sFilename\n");
 		$nLines = 0;
@@ -279,7 +288,7 @@ if(!$useQuery) { #----------- process strikes from 10-minute JSON files
 			} else {
 			$nLines = 0;
 			$nWritten = 0;
-				$gzfilename= $strikes_dir . gmdate("Y/m/d/H/",$run_time) . $run_time/600%6 . '0.json.gz';
+			$gzfilename= $strikes_dir . gmdate("Y/m/d/H/",(integer)$run_time) . intval(fmod($run_time/600,6)) . '0.json.gz';
 			$sFilename = preg_replace('|//([^@]+)@|','//user:pass-omitted@',$gzfilename);
 			log_msg("fetching new GZ strikes file at $sFilename\n");
 				$file= @gzopen($gzfilename, 'r');
@@ -314,6 +323,10 @@ if(!$useQuery) { #----------- process strikes from 10-minute JSON files
 	} else { # -------------------- use new query method
 	$T_begin = microtime(true);
   $rawStrikes = file($strikes_query);
+	if($rawStrikes == false) {
+		log_msg("--Query failed -- no data returned.  Exiting\n");
+		die("Strike data not available.");
+	}
   $T_end = microtime(true);
 	file_put_contents('./returned.txt',$rawStrikes);
 	$l_file= @fopen($local_strikes_file, 'w');
@@ -341,9 +354,9 @@ if(!$useQuery) { #----------- process strikes from 10-minute JSON files
 		$T_QPend = microtime(true);
 		$T_QPtotal = sprintf("%01.3f",round($T_QPend-$T_QPStart,3));
 		log_msg("Query returned $nWritten strikes .. saved to $local_strikes_file\n");
-		$T_firstStrike = date("D, d M Y H:i:s",$first_strike_time);
-		$T_lastStrike =  date("D, d M Y H:i:s",$last_strike_time);
-		$T_strikeCoverage = $last_strike_time - $first_strike_time;
+		$T_firstStrike = date("D, d M Y H:i:s T",$first_strike_time);
+		$T_lastStrike =  date("D, d M Y H:i:s T",$last_strike_time);
+		$T_strikeCoverage = round($last_strike_time - $first_strike_time,0);
 		log_msg("Query processing took $T_QPtotal seconds.\n");
 		log_msg("Strikes from $T_firstStrike to $T_lastStrike ($T_strikeCoverage seconds)\n");
 	} else {
@@ -624,13 +637,25 @@ foreach ($MapList as $mapspec) {
   $nLines = 0;
   if($GRplacefilename <> '') {
 	$GRfile = fopen($GRplacefilename,'w');
+	$GRfileUTCname = str_replace('.txt','UTC.txt',$GRplacefilename);
+	$GRfileUTC = fopen($GRfileUTCname,'w');
+	
 	$GRInitRecs = 
-";Bliztortung USA Placefile for GRLevel3
+"; Bliztortung USA Placefile for GRLevel3
 ; Placefile by Ken True, saratoga-weather.org
 ; Updated: ".date("D, d M Y H:i:s T", $ourStart)."
+Title: Blitzortung USA ".date('H:i:s T D M d',$ourStart)."
 RefreshSeconds: 300
 IconFile: 1,30,30,15,15,$GR3icons\n";
 	fwrite($GRfile,$GRInitRecs);
+	$GRInitRecsUTC = 
+"; Bliztortung USA Placefile for GRLevel3
+; Placefile by Ken True, saratoga-weather.org
+; Updated: UTC:$ourStart)
+Title: Blitzortung USA UTC:$ourStart
+RefreshSeconds: 300
+IconFile: 1,30,30,15,15,$GR3icons\n";
+	fwrite($GRfileUTC,$GRInitRecsUTC);
   }
   $file= @fopen($local_strikes_file, 'r');
   $total_time = 0;
@@ -675,9 +700,14 @@ IconFile: 1,30,30,15,15,$GR3icons\n";
 		 $GRiconNum = 5;
 	  }
 	  if($GRplacefilename <> '') {
-		$GRtime = date("H:i:s T",$strike_time);
+		$GRtime = date("g:i:sa T",(integer)$strike_time);
+		#$GRtimeUTC = gmdate("Y-m-d H:i:s",$strike_time)." UTC";
+		$GRrecUTC = $GRrec;
 		$GRrec .= "$GRiconNum,Blitzortung @ $GRtime\n";
 		fwrite($GRfile,$GRrec);
+		#$GRrecUTC .= "$GRiconNum,Blitzortung @ $GRtimeUTC\n";
+		$GRrecUTC .= "$GRiconNum,$strike_time\n";
+		fwrite($GRfileUTC,$GRrecUTC);
 	  }
   
   //
@@ -685,7 +715,11 @@ IconFile: 1,30,30,15,15,$GR3icons\n";
   //
 	  imageline ($img, $x-3, $y+0, $x+3, $y+0, $col);
 	  imageline ($img, $x+0, $y-3, $x+0, $y+3, $col);
-	  imagefilledpolygon ($img, array ($x-1, $y-1, $x+1, $y-1, $x+1, $y+1, $x-1, $y+1), 4, $col);
+	  if (version_compare(PHP_VERSION, '8.0.0', '>=')) {
+	    imagefilledpolygon ($img, array ($x-1, $y-1, $x+1, $y-1, $x+1, $y+1, $x-1, $y+1), $col);
+		} else {
+	    imagefilledpolygon ($img, array ($x-1, $y-1, $x+1, $y-1, $x+1, $y+1, $x-1, $y+1), 4, $col);
+		}
 	  
   //
   // square
@@ -713,7 +747,10 @@ IconFile: 1,30,30,15,15,$GR3icons\n";
 
   log_msg("$nLines strike lines processed.  $strikes drawn on map using $time_elapsed secs.\n");
   if($GRplacefilename <> '') {
-	fclose ($GRfile);
+		log_msg("placefile saved to $GRplacefilename\n");
+		log_msg("placefile UTC saved to $GRfileUTCname\n");
+	  fclose ($GRfile);
+	  fclose ($GRfileUTC);
   }
   
   //
@@ -772,8 +809,13 @@ function showStation(station) {
 				$StationStatus[$station['controller_status']]++;
 			}
 	
-			imagefilledpolygon ($img, array ($x-3, $y-3, $x+3, $y-3, $x+3, $y+3, $x-3, $y+3), 4, $col);
-			imagepolygon ($img, array ($x-3, $y-3, $x+3, $y-3, $x+3, $y+3, $x-3, $y+3), 4, $black);
+	    if (version_compare(PHP_VERSION, '8.0.0', '>=')) {
+			  imagefilledpolygon ($img, array ($x-3, $y-3, $x+3, $y-3, $x+3, $y+3, $x-3, $y+3), $col);
+			  imagepolygon ($img, array ($x-3, $y-3, $x+3, $y-3, $x+3, $y+3, $x-3, $y+3), $black);
+			} else {
+			  imagefilledpolygon ($img, array ($x-3, $y-3, $x+3, $y-3, $x+3, $y+3, $x-3, $y+3), 4, $col);
+			  imagepolygon ($img, array ($x-3, $y-3, $x+3, $y-3, $x+3, $y+3, $x-3, $y+3), 4, $black);
+			}
 			imageline    ($img, $x-1, $y, $x+1, $y, $black);
 			imageline    ($img, $x, $y-1, $x, $y+1, $black);
 			if(isset($showStationNames) and $showStationNames) {
@@ -804,7 +846,11 @@ function showStation(station) {
   // header line
   //
   $xl= 0; $xr= $img_width; $yt= 0; $yb= 16;
-  imagefilledpolygon ($img, array ($xl, $yt, $xl, $yb, $xr, $yb, $xr, $yt), 4, $bground_col);
+	if (version_compare(PHP_VERSION, '8.0.0', '>=')) {
+    imagefilledpolygon ($img, array ($xl, $yt, $xl, $yb, $xr, $yb, $xr, $yt), $bground_col);
+	} else {
+    imagefilledpolygon ($img, array ($xl, $yt, $xl, $yb, $xr, $yb, $xr, $yt), 4, $bground_col);
+	}
   imageline ($img, $xl, $yb+1, $xr, $yb+1, $black);
   $text= sprintf ("www.Blitzortung.org %s - %s / %d Strikes", date('Y-m-d T g:ia',$end_time-$time_interval), date('g:ia',$end_time), $strikes);
   imagestring ($img, 5, 5, 0, $text, $white);
@@ -824,7 +870,11 @@ function showStation(station) {
    $w= 102;
    $h= 152;
   
-  imagefilledpolygon ($img, array ($x, $y, $x, $y+$h, $x+$w, $y+$h, $x+$w, $y), 4, $bground_col);
+	 if (version_compare(PHP_VERSION, '8.0.0', '>=')) {
+     imagefilledpolygon ($img, array ($x, $y, $x, $y+$h, $x+$w, $y+$h, $x+$w, $y), $bground_col);
+	 } else {
+     imagefilledpolygon ($img, array ($x, $y, $x, $y+$h, $x+$w, $y+$h, $x+$w, $y), 4, $bground_col);
+	 }
   imageline ($img, $x, $y+$h+1, $x+$w, $y+$h+1, $black);
   imageline ($img, $x+$w+1, $y, $x+$w+1, $y+$h+1, $black);
   
@@ -836,11 +886,15 @@ function showStation(station) {
   $strikeColors = array($white,$yellow,$orange,$red_light,$red,$red_dark);
   
   for ($p=0;$p<6;$p++) {
-	$y+= 11;
-	$col = $strikeColors[$p];
-	imagestring ($img, 2, $x+$dx, $y+$dy, intval($p*$time_interval/6/60) . " - " . 
+		$y+= 11;
+		$col = $strikeColors[$p];
+		imagestring ($img, 2, $x+$dx, $y+$dy, intval($p*$time_interval/6/60) . " - " . 
 		 intval(($p+1)*$time_interval/6/60) . ' min', $white);
-	imagefilledpolygon ($img, array ($x-3, $y-6, $x+3, $y-6, $x+3, $y, $x-3, $y), 4, $col);
+		if (version_compare(PHP_VERSION, '8.0.0', '>=')) {
+	    imagefilledpolygon ($img, array ($x-3, $y-6, $x+3, $y-6, $x+3, $y, $x-3, $y), $col);
+	  } else {
+	    imagefilledpolygon ($img, array ($x-3, $y-6, $x+3, $y-6, $x+3, $y, $x-3, $y), 4, $col);
+	  }
   }
   
   // draw Station Legend
@@ -858,21 +912,33 @@ function showStation(station) {
   $y+= 11;
    
   $x-=2;
-  foreach ($Legends as $text => $stat) {
-	$col = $stat[0];
-	$idx = isset($stat[1])?$stat[1]:0;
-	imagefilledpolygon ($img, array ($x-3, $y-3, $x+3, $y-3, $x+3, $y+3, $x-3, $y+3), 4, $col);
-	imagepolygon ($img, array ($x-3, $y-3, $x+3, $y-3, $x+3, $y+3, $x-3, $y+3), 4, $black);
-	imageline    ($img, $x-1, $y, $x+1, $y, $black);
-	imageline    ($img, $x, $y-1, $x, $y+1, $black);
-	imagestring ($img, 2, $x+8, $y-8, $StationStatus[$idx].'-'.$text, $white);
-	$y+=11;
-  }
+	if(count($StationList) > 5) {
+		foreach ($Legends as $text => $stat) {
+		$col = $stat[0];
+		$idx = isset($stat[1])?$stat[1]:0;
+		if (version_compare(PHP_VERSION, '8.0.0', '>=')) {
+			imagefilledpolygon ($img, array ($x-3, $y-3, $x+3, $y-3, $x+3, $y+3, $x-3, $y+3), $col);
+		  imagepolygon ($img, array ($x-3, $y-3, $x+3, $y-3, $x+3, $y+3, $x-3, $y+3), $black);
+		} else {
+			imagefilledpolygon ($img, array ($x-3, $y-3, $x+3, $y-3, $x+3, $y+3, $x-3, $y+3), 4, $col);
+		  imagepolygon ($img, array ($x-3, $y-3, $x+3, $y-3, $x+3, $y+3, $x-3, $y+3), 4, $black);
+		}
+		imageline    ($img, $x-1, $y, $x+1, $y, $black);
+		imageline    ($img, $x, $y-1, $x, $y+1, $black);
+		imagestring ($img, 2, $x+8, $y-8, $StationStatus[$idx].'-'.$text, $white);
+		$y+=11;
+		}
+	} else {
+		imagestring($img,2,$x+1,$y-8,'Station data is',$white);
+		$y+=11;
+		imagestring($img,2,$x+1,$y-8,'not available.',$white);
+	}
+		
 	log_msg("Legend drawn for ".count($Legends)." types of station status.\n");
 
   // credit where credit is due :) 
   $y = $img_height - imagefontheight(1)-2;
-  $x = ($img_width / 2) - (imagefontwidth(1)*strlen($Credits)/2);
+  $x = (integer)(($img_width / 2) - (imagefontwidth(1)*strlen($Credits)/2));
   imagestring($img, 1, $x, $y, $Credits, $white);  
   
   //
@@ -1134,20 +1200,38 @@ function gen_animated_gif(
 	  $xC = ($img_width / 2);
 	  $xBar = $xC-($barLen/2);
 	  $yBar = $yC + (imagefontheight(1)/2)-2;
-	  imagepolygon ($img, 
-		array ($xBar-1, $yBar-1, 
+	  if (version_compare(PHP_VERSION, '8.0.0', '>=')) {
+	    imagepolygon ($img, 
+		  array ($xBar-1, $yBar-1, 
+			   $xBar+$barLen+1, $yBar-1,
+			   $xBar+$barLen+1, $yBar+$barHeight+1,
+			   $xBar-1, $yBar+$barHeight+1),
+			   $white);
+		} else {
+	    imagepolygon ($img, 
+		  array ($xBar-1, $yBar-1, 
 			   $xBar+$barLen+1, $yBar-1,
 			   $xBar+$barLen+1, $yBar+$barHeight+1,
 			   $xBar-1, $yBar+$barHeight+1),
 			   4, $white);
+		}
 	  $xLen = round($barLen*$imgNum/$numimages,0);
-	  imagefilledpolygon ($img, 
-		array ($xBar, $yBar,
-		$xBar+$xLen, $yBar,
-		$xBar+$xLen, $yBar+$barHeight,
-		$xBar, $yBar+$barHeight),
-		4, $white);
-  	} else { // regular progress bar
+	  if (version_compare(PHP_VERSION, '8.0.0', '>=')) {
+			imagefilledpolygon ($img, 
+			array ($xBar, $yBar,
+			$xBar+$xLen, $yBar,
+			$xBar+$xLen, $yBar+$barHeight,
+			$xBar, $yBar+$barHeight),
+			$white);
+		} else {
+			imagefilledpolygon ($img, 
+			array ($xBar, $yBar,
+			$xBar+$xLen, $yBar,
+			$xBar+$xLen, $yBar+$barHeight,
+			$xBar, $yBar+$barHeight),
+			4, $white);
+		}
+  } else { // regular progress bar
 	  $barLen = 100; // pixels for progress bar
 	  $barHeight = 6; // height of the progress bar
 	  $tcnt = ($imgNum<10)?" $imgNum":"$imgNum";
@@ -1156,24 +1240,42 @@ function gen_animated_gif(
 	  $xC = ($img_width / 2);
 	  $xBar = $xC-($barLen/2);
 	  $yBar = $yC + (imagefontheight(2)/2)-2;
-	  imagepolygon ($img, 
-		array ($xBar-1, $yBar-1, 
+	  if (version_compare(PHP_VERSION, '8.0.0', '>=')) {
+  	  imagepolygon ($img, 
+  		array ($xBar-1, $yBar-1, 
+			   $xBar+$barLen+1, $yBar-1,
+			   $xBar+$barLen+1, $yBar+$barHeight+1,
+			   $xBar-1, $yBar+$barHeight+1),
+			   $white);
+		} else {
+  	  imagepolygon ($img, 
+  		array ($xBar-1, $yBar-1, 
 			   $xBar+$barLen+1, $yBar-1,
 			   $xBar+$barLen+1, $yBar+$barHeight+1,
 			   $xBar-1, $yBar+$barHeight+1),
 			   4, $white);
+		}
 	  $xLen = round($barLen*$imgNum/$numimages,0);
 	  
-	  imagefilledpolygon ($img, 
-		array ($xBar, $yBar,
-		$xBar+$xLen, $yBar,
-		$xBar+$xLen, $yBar+$barHeight,
-		$xBar, $yBar+$barHeight),
-		4, $light_gray);
+	  if (version_compare(PHP_VERSION, '8.0.0', '>=')) {
+			imagefilledpolygon ($img, 
+			array ($xBar, $yBar,
+			$xBar+$xLen, $yBar,
+			$xBar+$xLen, $yBar+$barHeight,
+			$xBar, $yBar+$barHeight),
+			$light_gray);
+		} else {
+			imagefilledpolygon ($img, 
+			array ($xBar, $yBar,
+			$xBar+$xLen, $yBar,
+			$xBar+$xLen, $yBar+$barHeight,
+			$xBar, $yBar+$barHeight),
+			4, $light_gray);
+		}
   
   
 	  $y = imagefontheight(3)+ 5;
-	  $x = ($img_width / 2) + $barLen/2 + 4;
+	  $x = (integer)(($img_width / 2) + $barLen/2 + 4);
 	  imagestring($img, 2, $x, $y, $seqNum, $white);
 	} // end progress bar
     imagegif($img,$dirname.$basename."_$i.gif");
